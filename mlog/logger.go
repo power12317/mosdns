@@ -26,6 +26,15 @@ import (
 	"os"
 )
 
+type RotateConfig struct {
+	// Daily enables daily log rotation for File.
+	Daily bool `yaml:"daily"`
+
+	// KeepDays controls how many days of rotated logs to keep.
+	// Active log file is always kept separately.
+	KeepDays int `yaml:"keep_days"`
+}
+
 type LogConfig struct {
 	// Level, See also zapcore.ParseLevel.
 	Level string `yaml:"level"`
@@ -36,6 +45,9 @@ type LogConfig struct {
 
 	// Production enables json output.
 	Production bool `yaml:"production"`
+
+	// Rotate controls file rotation behavior.
+	Rotate RotateConfig `yaml:"rotate"`
 }
 
 var (
@@ -55,11 +67,19 @@ func NewLogger(lc LogConfig) (*zap.Logger, error) {
 
 	var out zapcore.WriteSyncer
 	if lf := lc.File; len(lf) > 0 {
-		f, _, err := zap.Open(lf)
-		if err != nil {
-			return nil, fmt.Errorf("open log file: %w", err)
+		if lc.Rotate.Daily {
+			f, err := newDailyRotateWriteSyncer(lf, lc.Rotate.KeepDays, timeNow)
+			if err != nil {
+				return nil, fmt.Errorf("open log file: %w", err)
+			}
+			out = f
+		} else {
+			f, _, err := zap.Open(lf)
+			if err != nil {
+				return nil, fmt.Errorf("open log file: %w", err)
+			}
+			out = zapcore.Lock(f)
 		}
-		out = zapcore.Lock(f)
 	} else {
 		out = stderr
 	}
