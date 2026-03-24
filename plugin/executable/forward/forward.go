@@ -254,8 +254,9 @@ func (f *Forward) exchange(ctx context.Context, qCtx *query_context.Context, us 
 	}
 
 	type res struct {
-		r   *dns.Msg
-		err error
+		r        *dns.Msg
+		err      error
+		upstream string
 	}
 
 	resChan := make(chan res)
@@ -293,7 +294,7 @@ func (f *Forward) exchange(ctx context.Context, qCtx *query_context.Context, us 
 				}
 			}
 			select {
-			case resChan <- res{r: r, err: err}:
+			case resChan <- res{r: r, err: err, upstream: u.name()}:
 			case <-done:
 			}
 		}(qCtx.Id(), qCtx.QQuestion())
@@ -311,6 +312,7 @@ func (f *Forward) exchange(ctx context.Context, qCtx *query_context.Context, us 
 			if i < concurrent-1 && r.Rcode != dns.RcodeSuccess && r.Rcode != dns.RcodeNameError {
 				continue
 			}
+			query_context.SetFinalUpstream(qCtx, res.upstream)
 			return r, nil
 		case <-ctx.Done():
 			return nil, context.Cause(ctx)
